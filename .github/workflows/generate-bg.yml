@@ -1,27 +1,36 @@
 name: Async Background Generator
 on:
   repository_dispatch:
-    types: [generate_bg] # 监听 n8n 发来的信号
+    types: [generate_bg]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 18
-      - name: Install Puppeteer
-        run: npm install puppeteer
+
+      - name: Install Puppeteer and Chrome dependencies
+        run: |
+          npm install puppeteer
+          # 安装 Chrome 运行所需的全部底层 Linux 库
+          sudo apt-get update
+          sudo apt-get install -y libgbm-dev libnss3 libatk-bridge2.0-0 libxkbcommon-x11-0 libgtk-3-0 libasound2 libpangocairo-1.0-0 libpango-1.0-0 libcups2
+
       - name: Run Drawing Script
         env:
           IMAGE_PROMPT: ${{ github.event.client_payload.prompt }}
         run: node scripts/generate_image.js
+
       - name: Commit & Push to Asset Storage
         run: |
           git config --global user.name "AI-Asset-Bot"
           git config --global user.email "bot@pantech.com"
           git add assets/*.png
-          git commit -m "Auto-generated new background"
+          # 如果没有生成新图，不报错直接退出
+          git commit -m "Auto-generated new background" || exit 0
           git push
