@@ -1,0 +1,27 @@
+name: Async Background Generator
+on:
+  repository_dispatch:
+    types: [generate_bg] # 监听 n8n 发来的信号
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Install Puppeteer
+        run: npm install puppeteer
+      - name: Run Drawing Script
+        env:
+          IMAGE_PROMPT: ${{ github.event.client_payload.prompt }}
+        run: node scripts/generate_image.js
+      - name: Commit & Push to Asset Storage
+        run: |
+          git config --global user.name "AI-Asset-Bot"
+          git config --global user.email "bot@pantech.com"
+          git add assets/*.png
+          git commit -m "Auto-generated new background"
+          git push
