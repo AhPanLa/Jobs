@@ -5,37 +5,40 @@ const path = require('path');
 async function run() {
     const prompt = process.env.IMAGE_PROMPT || "Professional minimalist tech background";
     
-    console.log("🚀 启动浏览器中...");
+    console.log("🚀 启动浏览器中 (增加超时耐性)...");
     
-    // 这里的 args 数组是修复的关键
     const browser = await puppeteer.launch({ 
-        headless: true, // 新版 Puppeteer 建议直接用 true
+        headless: true,
+        // 关键修复：增加协议超时时间到 120 秒，防止 AI 画图太久导致断开
+        protocolTimeout: 120000, 
         args: [
             '--no-sandbox', 
             '--disable-setuid-sandbox', 
-            '--disable-dev-shm-usage', // 极其重要：GitHub Actions 内存文件系统限制
-            '--disable-accelerated-2d-canvas', 
-            '--disable-gpu',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process' // 在 CI 环境下更稳定
+            '--disable-dev-shm-usage',
+            '--disable-gpu'
         ] 
     });
     
     const page = await browser.newPage();
+    // 设置页面导航超时
+    page.setDefaultNavigationTimeout(120000);
 
     try {
         console.log("🌐 正在注入 Puter.js 环境...");
         await page.goto('about:blank');
         await page.addScriptTag({ url: 'https://js.puter.com/v2/' });
 
-        // 增加等待时间确保脚本加载
-        await new Promise(r => setTimeout(r, 2000));
+        // 等待 Puter 加载完成
+        await page.waitForFunction(() => typeof puter !== 'undefined', { timeout: 30000 });
 
-        console.log(`🎨 正在生成图片，Prompt: ${prompt}`);
+        console.log(`🎨 AI 开始绘图，这可能需要 30-60 秒，请稍候...`);
+        
+        // 这里的 evaluate 也会运行很久，所以必须确保内部逻辑稳定
         const base64Data = await page.evaluate(async (p) => {
-            if (typeof puter === 'undefined') throw new Error("Puter.js 未能加载");
-            const img = await puter.ai.txt2img(p, { model: "gemini-2.5-flash-image-preview" });
+            // 在浏览器内部调用绘图
+            const img = await puter.ai.txt2img(p, { 
+                model: "gemini-2.5-flash-image-preview" 
+            });
             return img.src; 
         }, prompt);
 
@@ -46,9 +49,13 @@ async function run() {
         const fileName = `bg_${Date.now()}.png`;
         fs.writeFileSync(path.join(assetsDir, fileName), buffer);
         
-        console.log(`✅ 图片生成成功并保存为: ${fileName}`);
+        console.log(`✅ 太棒了！图片已入库: ${fileName}`);
     } catch (error) {
-        console.error("❌ 绘图失败:", error.message);
+        console.error("❌ 绘图最终还是失败了:", error.message);
+        // 如果超时，输出更详细的提示
+        if (error.message.includes('timeout')) {
+            console.log("提示：AI 响应时间超过了预期，请尝试简化 Prompt 或稍后再试。");
+        }
         process.exit(1);
     } finally {
         await browser.close();
