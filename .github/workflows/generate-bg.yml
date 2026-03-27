@@ -1,33 +1,36 @@
 name: Async Background Generator
+
 on:
   repository_dispatch:
-    types: [generate_bg]
+    types: [generate_bg] # 监听 n8n 的触发信号
 
-# 关键修复：显式授予写权限，允许 Action 把图片 Push 回仓库
+# 关键：授予 Action 对仓库的写入权限，解决 403 报错
 permissions:
   contents: write
 
 jobs:
-  build:
+  generate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - name: Run Drawing Script
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Generate Image
         env:
+          # 将 n8n 传来的 prompt 注入环境变量
           IMAGE_PROMPT: ${{ github.event.client_payload.prompt }}
         run: node scripts/generate_image.js
 
-      - name: Commit & Push to Asset Storage
+      - name: Commit and Push to Assets
         run: |
           git config --global user.name "AI-Asset-Bot"
           git config --global user.email "bot@pantech.com"
           git add assets/*.png
-          git commit -m "Auto-generated Flux background" || exit 0
-          # 注意：这里我们使用默认生成的 GITHUB_TOKEN
+          # 如果没有变化则跳过，防止报错
+          git commit -m "Auto-generated Flux background: ${{ github.event.client_payload.prompt }}" || exit 0
           git push
