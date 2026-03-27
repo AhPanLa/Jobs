@@ -2,9 +2,9 @@ name: Async Background Generator
 
 on:
   repository_dispatch:
-    types: [generate_bg] # 监听 n8n 的触发信号
+    types: [generate_bg]
 
-# 关键：授予 Action 对仓库的写入权限，解决 403 报错
+# 允许 Action 写入图片到仓库
 permissions:
   contents: write
 
@@ -20,17 +20,18 @@ jobs:
         with:
           node-version: 20
 
-      - name: Generate Image
+      - name: Generate AI Background
         env:
-          # 将 n8n 传来的 prompt 注入环境变量
           IMAGE_PROMPT: ${{ github.event.client_payload.prompt }}
+          # 关键：从 Secrets 中提取 Token 注入到环境变量
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: node scripts/generate_image.js
 
-      - name: Commit and Push to Assets
+      - name: Commit and Push to Assets Storage
         run: |
           git config --global user.name "AI-Asset-Bot"
           git config --global user.email "bot@pantech.com"
           git add assets/*.png
-          # 如果没有变化则跳过，防止报错
-          git commit -m "Auto-generated Flux background: ${{ github.event.client_payload.prompt }}" || exit 0
+          # 如果没有文件变化则跳过，防止 Action 失败
+          git commit -m "Auto-generated HF-SDXL background: ${{ github.event.client_payload.prompt }}" || exit 0
           git push
