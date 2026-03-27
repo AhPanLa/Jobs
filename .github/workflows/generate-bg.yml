@@ -17,13 +17,11 @@ jobs:
       - name: Generate Image
         env:
           IMAGE_PROMPT: ${{ github.event.client_payload.prompt }}
-          # ✅ 从 GitHub Secrets 读取 API Key
-          POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
         run: node scripts/generate_image.js
-      - name: Push Asset
+      - name: Push to Repository
         run: |
           git config --global user.name "AI-Asset-Bot"
           git config --global user.email "bot@pantech.com"
           git add assets/*.png
-          git commit -m "New authenticated asset" || exit 0
+          git commit -m "Auto-generated background asset" || exit 0
           git push
