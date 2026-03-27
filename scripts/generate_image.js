@@ -2,14 +2,18 @@ const fs = require('fs');
 const path = require('path');
 
 async function run() {
+    // 1. 获取并清理 Prompt
     const rawPrompt = process.env.IMAGE_PROMPT || "Modern minimalist tech hiring poster background, dark theme, gold accents";
-    const enhancedPrompt = `${rawPrompt}, professional corporate style, minimalist, no text, 4k`;
+    // 强制加入背景专用关键词，并清理掉特殊字符
+    const cleanPrompt = encodeURIComponent(rawPrompt.replace(/[^\w\s]/gi, '') + " professional minimalist background no text 4k");
     
-    // ✅ 关键修复：使用 2026 年标准的 OpenAI 兼容路由
-    const url = "https://router.huggingface.co/v1/images/generations";
-    const modelId = "stabilityai/stable-diffusion-xl-base-1.0"; // 如果这个报错，可以换成 SG161222/RealVisXL_V4.0
-    
-    console.log(`🚀 正在通过 2026 标准路由连接 AI 引擎...`);
+    // ✅ 2. 使用 2026 年最稳的“图像直连”地址
+    // 这个地址直接返回 PNG 图片，不走 JSON 路由，完美避开 404 和 401 权限问题
+    const seed = Math.floor(Math.random() * 1000000);
+    const url = `https://pollinations.ai/p/${cleanPrompt}?width=1024&height=1024&seed=${seed}&model=flux&nologo=true`;
+
+    console.log(`🚀 启动“全路径绕行”方案...`);
+    console.log(`🔗 图像源: ${url}`);
 
     const assetsDir = path.join(__dirname, '../assets/');
     const fileName = `bg_${Date.now()}.png`;
@@ -18,39 +22,35 @@ async function run() {
     if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
 
     try {
+        console.log("⏳ 正在从全球节点抓取 AI 图像流...");
+        
+        // 使用 Node.js 20+ 的 fetch 直接获取图像流
         const response = await fetch(url, {
-            method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.HF_TOKEN}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: modelId,
-                prompt: enhancedPrompt,
-                n: 1,
-                size: "1024x1024",
-                response_format: "b64_json" // 我们直接要 Base64 数据，防止图片过期
-            })
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            }
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            console.error(`❌ AI 引擎拒绝了请求 [${response.status}]:`, errorData.error?.message || "未知错误");
-            process.exit(1);
+            throw new Error(`服务器响应异常: ${response.status}`);
         }
 
-        const json = await response.json();
-        const base64Data = json.data[0].b64_json;
+        // 直接读取二进制流
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
         
-        // 将 Base64 保存为 PNG 文件
-        const buffer = Buffer.from(base64Data, 'base64');
+        // 检查返回的是不是真的图片（防止返回的是错误网页）
+        if (buffer.length < 1000) {
+            throw new Error("下载的文件太小，可能不是有效的图片。");
+        }
+
         fs.writeFileSync(filePath, buffer);
 
-        console.log(`✅ 【奇迹发生】海报底图已入库: ${fileName}`);
+        console.log(`✅ 【奇迹终于发生】海报底图已入库: ${fileName}`);
         process.exit(0);
 
     } catch (error) {
-        console.error(`❌ 系统级崩溃: ${error.message}`);
+        console.error(`❌ 最终方案失败: ${error.message}`);
         process.exit(1);
     }
 }
