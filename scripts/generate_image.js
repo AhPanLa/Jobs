@@ -9,6 +9,7 @@ async function run() {
     const url = "https://image.pollinations.ai/prompt/" + cleanPrompt + "?width=1024&height=1024&nologo=true&model=flux";
 
     console.log(`🚀 正在使用 API Key 发起认证请求...`);
+    console.log(`Bearer ${process.env.POLLINATIONS_API_KEY}`);
 
     const assetsDir = path.join(__dirname, '../assets/');
     const fileName = `bg_${Date.now()}.png`;
