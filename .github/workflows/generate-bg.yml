@@ -13,16 +13,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20 # 确保使用支持 fetch 的版本
-      - name: Run Script
+          node-version: 20
+      - name: Generate Image
         env:
           IMAGE_PROMPT: ${{ github.event.client_payload.prompt }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: node scripts/generate_image.js
-      - name: Save Asset
+      - name: Push to Repository
         run: |
           git config --global user.name "AI-Asset-Bot"
           git config --global user.email "bot@pantech.com"
           git add assets/*.png
-          git commit -m "New background: ${{ github.event.client_payload.prompt }}" || exit 0
+          git commit -m "New Asset: ${{ github.event.client_payload.prompt }}" || exit 0
           git push
