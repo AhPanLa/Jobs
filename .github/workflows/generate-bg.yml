@@ -1,10 +1,8 @@
 name: Async Background Generator
-
 on:
   repository_dispatch:
     types: [generate_bg]
 
-# 允许 Action 写入图片到仓库
 permissions:
   contents: write
 
@@ -12,26 +10,19 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
-
-      - name: Generate AI Background
+          node-version: 20 # 确保使用支持 fetch 的版本
+      - name: Run Script
         env:
           IMAGE_PROMPT: ${{ github.event.client_payload.prompt }}
-          # 关键：从 Secrets 中提取 Token 注入到环境变量
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: node scripts/generate_image.js
-
-      - name: Commit and Push to Assets Storage
+      - name: Save Asset
         run: |
           git config --global user.name "AI-Asset-Bot"
           git config --global user.email "bot@pantech.com"
           git add assets/*.png
-          # 如果没有文件变化则跳过，防止 Action 失败
-          git commit -m "Auto-generated HF-SDXL background: ${{ github.event.client_payload.prompt }}" || exit 0
+          git commit -m "New background: ${{ github.event.client_payload.prompt }}" || exit 0
           git push
