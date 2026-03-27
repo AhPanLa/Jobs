@@ -3,50 +3,78 @@ const path = require('path');
 const https = require('https');
 
 async function run() {
-    // 1. 获取从 n8n 发来的 Prompt，如果没有则用默认值
+    // 1. 获取 Prompt
     const rawPrompt = process.env.IMAGE_PROMPT || "Modern minimalist tech hiring poster background, dark theme, gold accents";
+    const enhancedPrompt = `${rawPrompt}, minimalist, high resolution, 4k, professional, no text, dark aesthetic, flat vector style`;
     
-    // 2. 增强 Prompt，确保生成的图适合做海报底图（无文字、简约、高画质）
-    const enhancedPrompt = `${rawPrompt}, minimalist, professional, high resolution, no text, flat design, 3:4 aspect ratio`;
-    const encodedPrompt = encodeURIComponent(enhancedPrompt);
+    // 2. 使用 Hugging Face 顶级的 SDXL 模型
+    const modelUrl = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0";
     
-    // 3. 使用 gen.pollinations.ai (新接口) + 随机 Seed 确保多样性
-    const seed = Math.floor(Math.random() * 1000000);
-    const imageUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?width=1080&height=1440&nologo=true&seed=${seed}&model=flux`;
-
-    console.log(`🎨 正在从 Flux 引擎生成背景图...`);
-    console.log(`🔗 URL: ${imageUrl}`);
+    console.log(`🎨 正在调用 Hugging Face 引擎 (SDXL)...`);
 
     const assetsDir = path.join(__dirname, '../assets/');
     const fileName = `bg_${Date.now()}.png`;
     const filePath = path.join(assetsDir, fileName);
 
-    // 4. 确保 assets 文件夹存在
     if (!fs.existsSync(assetsDir)) {
         fs.mkdirSync(assetsDir, { recursive: true });
     }
 
+    const postData = JSON.stringify({ 
+        inputs: enhancedPrompt,
+        parameters: {
+            width: 1024,
+            height: 1024 // SDXL 标准尺寸
+        }
+    });
+
+    const options = {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${process.env.HF_TOKEN}`, // 从环境变量读取，不硬编码
+            'Content-Type': 'application/json',
+            'User-Agent': 'PanTech-Studio-Bot/1.0'
+        }
+    };
+
+    console.log("⏳ AI 正在思考并构图，请稍后...");
+
     const file = fs.createWriteStream(filePath);
 
-    // 5. 执行下载请求
-    https.get(imageUrl, (response) => {
-        // 处理可能的重定向或错误
-        if (response.statusCode !== 200) {
-            console.error(`❌ 请求失败，状态码: ${response.statusCode}`);
+    const req = https.request(modelUrl, options, (res) => {
+        // 如果返回 503，说明模型正在加载，需要等几十秒
+        if (res.statusCode === 503) {
+            console.error("⚠️ 模型正在加载 (Loading Model)，请 20 秒后再试一次。");
             process.exit(1);
         }
 
-        response.pipe(file);
+        if (res.statusCode !== 200) {
+            console.error(`❌ 生成失败，状态码: ${res.statusCode}`);
+            let errorBody = '';
+            res.on('data', (d) => errorBody += d);
+            res.on('end', () => {
+                console.error("错误详情:", errorBody);
+                process.exit(1);
+            });
+            return;
+        }
+
+        res.pipe(file);
 
         file.on('finish', () => {
             file.close();
-            console.log(`✅ 图片生成成功并存入 Asset Storage: ${fileName}`);
+            console.log(`✅ 底图已成功存入 Assets: ${fileName}`);
             process.exit(0);
         });
-    }).on('error', (err) => {
-        console.error(`❌ 下载过程中出错: ${err.message}`);
+    });
+
+    req.on('error', (e) => {
+        console.error(`❌ 网络请求错误: ${e.message}`);
         process.exit(1);
     });
+
+    req.write(postData);
+    req.end();
 }
 
 run();
