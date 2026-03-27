@@ -2,17 +2,13 @@ const fs = require('fs');
 const path = require('path');
 
 async function run() {
-    // 1. 获取并极致简化 Prompt
     const rawPrompt = process.env.IMAGE_PROMPT || "Modern minimalist tech hiring poster background";
-    // 只保留字母和空格，防止特殊字符导致 URL 变成网页
-    const cleanPrompt = encodeURIComponent(rawPrompt.replace(/[^a-zA-Z0-9\s]/g, '').trim());
+    const cleanPrompt = encodeURIComponent(rawPrompt + ", minimalist tech aesthetic, 4k, no text");
     
-    // ✅ 使用专门的图片生成子域名，这个地址最不容易返回网页
-    const seed = Math.floor(Math.random() * 1000000);
-    const url = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&seed=${seed}&nologo=true`;
+    // ✅ 2026 认证版接口地址
+    const url = "https://image.pollinations.ai/prompt/" + cleanPrompt + "?width=1024&height=1024&nologo=true&model=flux";
 
-    console.log(`🚀 启动强制图像抓取...`);
-    console.log(`🔗 目标地址: ${url}`);
+    console.log(`🚀 正在使用 API Key 发起认证请求...`);
 
     const assetsDir = path.join(__dirname, '../assets/');
     const fileName = `bg_${Date.now()}.png`;
@@ -21,33 +17,39 @@ async function run() {
     if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
 
     try {
-        console.log("⏳ 正在下载二进制图像流...");
-        
         const response = await fetch(url, {
+            method: 'GET',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                // ✅ 关键修复：添加 Authorization Header
+                'Authorization': `Bearer ${process.env.POLLINATIONS_API_KEY}`,
+                'User-Agent': 'PanTech-Automation-Bot/6.0'
             }
         });
 
-        if (!response.ok) throw new Error(`HTTP 错误: ${response.status}`);
+        if (response.status === 401) {
+            throw new Error("API Key 无效或已过期，请检查 GitHub Secrets。");
+        }
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`服务器报错 [${response.status}]: ${errorText}`);
+        }
 
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        // ✅ 关键检查：如果文件开头是 "<!DOCTYPE" 或 "<html"，说明下载的是网页而不是图片
-        const fileContentStart = buffer.toString('utf-8', 0, 15);
-        if (fileContentStart.includes('<!DOCTYPE') || fileContentStart.includes('<html')) {
-            console.error("❌ 错误：下载到的是网页代码而非图片！请检查 Prompt。");
-            process.exit(1);
+        // 检查是否误下到了 HTML (防止跳转)
+        if (buffer.toString('utf8', 0, 10).includes('<!DOCTYPE')) {
+            throw new Error("下载失败：服务器返回了网页而不是图片。");
         }
 
         fs.writeFileSync(filePath, buffer);
 
-        console.log(`✅ 【真正成功】照片已入库: ${fileName}`);
+        console.log(`✅ 【认证成功】照片已存入 Assets: ${fileName}`);
         process.exit(0);
 
     } catch (error) {
-        console.error(`❌ 抓取失败: ${error.message}`);
+        console.error(`❌ 运行失败: ${error.message}`);
         process.exit(1);
     }
 }
