@@ -3,9 +3,13 @@ on:
   repository_dispatch:
     types: [generate_bg]
 
+# 关键修复：显式授予写权限，允许 Action 把图片 Push 回仓库
+permissions:
+  contents: write
+
 jobs:
   build:
-    runs-on: ubuntu-latest # 回到最新版也没问题，因为不需要底层库了
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       
@@ -25,4 +29,5 @@ jobs:
           git config --global user.email "bot@pantech.com"
           git add assets/*.png
           git commit -m "Auto-generated Flux background" || exit 0
+          # 注意：这里我们使用默认生成的 GITHUB_TOKEN
           git push
